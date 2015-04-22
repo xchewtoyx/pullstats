@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+import os
 import json
+import logging
 
 import httplib2
 
@@ -38,9 +40,9 @@ PROJECT_NUMBER = '462995942151'
 class BigQuery(object):
     def __init__(self):
         self.flow = flow_from_clientsecrets(
-            'client_secrets.json',
+            file_path('client_secrets.json'),
             scope='https://www.googleapis.com/auth/bigquery')
-        self.storage = Storage('bigquery_credentials.dat')
+        self.storage = Storage(file_path('bigquery_credentials.dat'))
         self.credentials = self.storage.get()
         if self.credentials is None or self.credentials.invalid:
             self.authorize()
@@ -66,6 +68,10 @@ class BigQuery(object):
             data_points.append(result_row)
 
         return data_points
+
+
+def file_path(basename):
+    return os.path.join(os.path.dirname(__file__), basename)
 
 def main():
     bq = BigQuery()

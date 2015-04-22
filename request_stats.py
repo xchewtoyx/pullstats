@@ -63,7 +63,7 @@ class BigQuery(object):
             projectId=PROJECT_NUMBER, body={'query': query}).execute()
 
         data_points = []
-        for row in query_response['rows']:
+        for row in query_response.get('rows', []):
             result_row = []
             for i, value in enumerate(row['f']):
                 column = query_response['schema']['fields'][i]['name']
