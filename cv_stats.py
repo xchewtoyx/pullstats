@@ -15,14 +15,15 @@ QUERY='''
 SELECT
     metadata.timestamp AS timestamp,
     protoPayload.resource AS resource,
-    REGEXP_EXTRACT(protoPayload.line.logMessage, r'(\d+)$') AS cv_calls
+    INTEGER(REGEXP_EXTRACT(protoPayload.line.logMessage, r'(\d+)$')) AS cv_calls
 FROM (TABLE_DATE_RANGE(
          pull_api_logs.appengine_googleapis_com_request_log_,
-         DATE_ADD(CURRENT_TIMESTAMP(), -900, "SECOND"),
+         DATE_ADD(CURRENT_TIMESTAMP(), -300, "SECOND"),
          CURRENT_TIMESTAMP()))
 WHERE 
-metadata.timestamp > DATE_ADD(CURRENT_TIMESTAMP(), -900, 'SECOND') AND
-protoPayload.line.logMessage CONTAINS 'Comicvine api'
+protoPayload.line.logMessage CONTAINS 'Comicvine api' AND
+metadata.timestamp > DATE_ADD(CURRENT_TIMESTAMP(), -300, 'SECOND')
+HAVING cv_calls > 0
 ORDER BY timestamp
 LIMIT 1000;
 '''
@@ -52,7 +53,7 @@ class BigQuery(object):
     def authorize(self):
         self.credentials = tools.run_flow(
             self.flow, self.storage,
-            tools.argparser.parse_args([]))
+            tools.argparser.parse_args())
 
     def query(self, query):
         query_request = self.service.jobs()
@@ -60,7 +61,7 @@ class BigQuery(object):
             projectId=PROJECT_NUMBER, body={'query': query}).execute()
 
         data_points = []
-        for row in query_response['rows']:
+        for row in query_response.get('rows', []):
             result_row = []
             for i, value in enumerate(row['f']):
                 column = query_response['schema']['fields'][i]['name']
@@ -74,20 +75,24 @@ def file_path(basename):
     return os.path.join(os.path.dirname(__file__), basename)
 
 def main():
+    logging.getLogger().addHandler(logging.StreamHandler())
+    logging.getLogger().setLevel(logging.INFO)
     bq = BigQuery()
     data_points = bq.query(QUERY)
+    logging.info('Found %d data points', len(data_points))
 
-    influx_points=[{
-        'name': 'requests',
-        'columns': [
-            'time',
-            'resource',
-            'cv_calls',
-        ],
-        'points': data_points
-    }]
+    if data_points:
+        influx_points=[{
+            'name': 'requests',
+            'columns': [
+                'time',
+                'resource',
+                'cv_calls',
+            ],
+            'points': data_points
+        }]
 
-    print json.dumps(influx_points)
+        print json.dumps(influx_points)
 
 if __name__ == '__main__':
     main()

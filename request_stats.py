@@ -20,9 +20,9 @@ SELECT
     MAX(protoPayload.latency) AS latency
 FROM (TABLE_DATE_RANGE(
          pull_api_logs.appengine_googleapis_com_request_log_,
-         DATE_ADD(CURRENT_TIMESTAMP(), -900, "SECOND"),
+         DATE_ADD(CURRENT_TIMESTAMP(), -300, "SECOND"),
          CURRENT_TIMESTAMP()))
-WHERE metadata.timestamp > DATE_ADD(CURRENT_TIMESTAMP(), -900, 'SECOND')
+WHERE metadata.timestamp > DATE_ADD(CURRENT_TIMESTAMP(), -300, 'SECOND')
 GROUP BY protoPayload.requestId
 ORDER BY timestamp
 LIMIT 1000
@@ -81,7 +81,7 @@ def main():
     logging.getLogger().setLevel(logging.INFO)
     bq = BigQuery()
     data_points = bq.query(QUERY)
-    logging.info('Found %d data points:', len(data_points))
+    logging.info('Found %d data points', len(data_points))
 
     if data_points:
         influx_points=[{
