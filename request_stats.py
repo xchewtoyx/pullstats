@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+import os
 import json
+import logging
 
 import httplib2
 
@@ -41,9 +43,9 @@ PROJECT_NUMBER = '462995942151'
 class BigQuery(object):
     def __init__(self):
         self.flow = flow_from_clientsecrets(
-            'client_secrets.json',
+            file_path('client_secrets.json'),
             scope='https://www.googleapis.com/auth/bigquery')
-        self.storage = Storage('bigquery_credentials.dat')
+        self.storage = Storage(file_path('bigquery_credentials.dat'))
         self.credentials = self.storage.get()
         if self.credentials is None or self.credentials.invalid:
             self.authorize()
@@ -53,7 +55,7 @@ class BigQuery(object):
     def authorize(self):
         self.credentials = tools.run_flow(
             self.flow, self.storage,
-            tools.argparser.parse_args([]))
+            tools.argparser.parse_args())
 
     def query(self, query):
         query_request = self.service.jobs()
@@ -70,23 +72,31 @@ class BigQuery(object):
 
         return data_points
 
+
+def file_path(basename):
+    return os.path.join(os.path.dirname(__file__), basename)
+
 def main():
+    logging.getLogger().addHandler(logging.StreamHandler())
+    logging.getLogger().setLevel(logging.INFO)
     bq = BigQuery()
     data_points = bq.query(QUERY)
+    logging.info('Found %d data points:', len(data_points))
 
-    influx_points=[{
-        'name': 'requests',
-        'columns': [
-            'time',
-            'resource',
-            'status_code',
-            'size_bytes',
-            'latency_secs',
-        ],
-        'points': data_points
-    }]
-
-    print json.dumps(influx_points)
-
+    if data_points:
+        influx_points=[{
+            'name': 'requests',
+            'columns': [
+                'time',
+                'resource',
+                'status_code',
+                'size_bytes',
+                'latency_secs',
+            ],
+            'points': data_points
+        }]
+    
+        print json.dumps(influx_points)
+    
 if __name__ == '__main__':
     main()
