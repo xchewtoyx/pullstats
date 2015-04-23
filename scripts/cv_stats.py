@@ -3,13 +3,7 @@ import os
 import json
 import logging
 
-import httplib2
-
-from apiclient.discovery import build
-
-from oauth2client.client import flow_from_clientsecrets
-from oauth2client.file import Storage
-from oauth2client import tools
+from pullstats.bigquery.client import BigQueryClient, BaseValidator
 
 QUERY='''
 SELECT
@@ -28,58 +22,22 @@ ORDER BY timestamp
 LIMIT 1000;
 '''
 
-# Convert result columns from text to the correct type
-VALIDATOR = {
-    'timestamp': lambda x: int(float(x)*1000),
-    'resource': lambda x: x,
-    'cv_calls': lambda x: int(x),
-}
-
 # Enter your Google Developer Project number
 PROJECT_NUMBER = '462995942151'
 
-class BigQuery(object):
-    def __init__(self):
-        self.flow = flow_from_clientsecrets(
-            file_path('client_secrets.json'),
-            scope='https://www.googleapis.com/auth/bigquery')
-        self.storage = Storage(file_path('bigquery_credentials.dat'))
-        self.credentials = self.storage.get()
-        if self.credentials is None or self.credentials.invalid:
-            self.authorize()
-        self.http = self.credentials.authorize(httplib2.Http())
-        self.service = build('bigquery', 'v2', http=self.http)
+class ComicvineValidator(BaseValidator):
+    def timestamp(self, value):
+        return int(float(value)*1000)
 
-    def authorize(self):
-        self.credentials = tools.run_flow(
-            self.flow, self.storage,
-            tools.argparser.parse_args())
+    def cv_calls(self, value):
+        return int(value)
 
-    def query(self, query):
-        query_request = self.service.jobs()
-        query_response = query_request.query(
-            projectId=PROJECT_NUMBER, body={'query': query}).execute()
-        logging.debug(json.dumps(query_response))
-
-        data_points = []
-        for row in query_response.get('rows', []):
-            result_row = []
-            for i, value in enumerate(row['f']):
-                column = query_response['schema']['fields'][i]['name']
-                result_row.append(VALIDATOR[column](value['v']))
-            data_points.append(result_row)
-
-        return data_points
-
-
-def file_path(basename):
-    return os.path.join(os.path.dirname(__file__), basename)
 
 def main():
     logging.getLogger().addHandler(logging.StreamHandler())
-    logging.getLogger().setLevel(logging.DEBUG)
-    bq = BigQuery()
-    data_points = bq.query(QUERY)
+    logging.getLogger().setLevel(logging.WARN)
+    bq = BigQueryClient(PROJECT_NUMBER, os.path.dirname(__file__))
+    data_points = bq.query(QUERY, validator=ComicvineValidator())
     logging.info('Found %d data points', len(data_points))
 
     if data_points:
