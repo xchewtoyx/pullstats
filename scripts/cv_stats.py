@@ -13,6 +13,7 @@ SELECT
     REGEXP_EXTRACT(protoPayload.line.logMessage, r' url=([^?]+)') AS cv_url,
     REGEXP_EXTRACT(protoPayload.line.logMessage,
                    r' msec=([\d.]+)') AS response_time,
+    REGEXP_EXTRACT(protoPayload.line.logMessage, r' size=(\d+)') AS size,
     REGEXP_EXTRACT(protoPayload.line.logMessage, r' retry=(\d+)') AS retry
 FROM (TABLE_DATE_RANGE(
          pull_api_logs.appengine_googleapis_com_request_log_,
@@ -37,13 +38,16 @@ class ComicvineValidator(BaseValidator):
     def response_time(self, value):
         return float(value)
 
+    def size(self, value):
+        return int(value)
+
     def retry(self, value):
         return int(value)
 
 
 def main():
     logging.getLogger().addHandler(logging.StreamHandler())
-    logging.getLogger().setLevel(logging.WARN)
+    logging.getLogger().setLevel(logging.INFO)
     bq = BigQueryClient(PROJECT_NUMBER, os.path.dirname(__file__))
     data_points = bq.query(QUERY, validator=ComicvineValidator())
     logging.info('Found %d data points', len(data_points))
@@ -55,10 +59,11 @@ def main():
             'status',
             'cv_url',
             'response_time',
+            'size',
             'retry'
         ]
         influx_points=[{
-            'name': 'requests',
+            'name': 'cvstats',
             'columns': columns,
             'points': [
                 [row[key] for key in columns] for row in data_points
