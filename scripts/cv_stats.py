@@ -59,6 +59,7 @@ class BigQuery(object):
         query_request = self.service.jobs()
         query_response = query_request.query(
             projectId=PROJECT_NUMBER, body={'query': query}).execute()
+        logging.debug(json.dumps(query_response))
 
         data_points = []
         for row in query_response.get('rows', []):
@@ -76,7 +77,7 @@ def file_path(basename):
 
 def main():
     logging.getLogger().addHandler(logging.StreamHandler())
-    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.DEBUG)
     bq = BigQuery()
     data_points = bq.query(QUERY)
     logging.info('Found %d data points', len(data_points))
