@@ -9,16 +9,18 @@ QUERY='''
 SELECT
     metadata.timestamp AS time,
     protoPayload.resource AS resource,
-    INTEGER(REGEXP_EXTRACT(protoPayload.line.logMessage, r'(\d+)$')) AS cv_calls
+    REGEXP_EXTRACT(protoPayload.line.logMessage, r' status=(\d+)') AS status,
+    REGEXP_EXTRACT(protoPayload.line.logMessage, r' url=([^?]+)') AS cv_url,
+    REGEXP_EXTRACT(protoPayload.line.logMessage,
+                   r' msec=([\d.]+)') AS response_time,
+    REGEXP_EXTRACT(protoPayload.line.logMessage, r' retry=(\d+)') AS retry
 FROM (TABLE_DATE_RANGE(
          pull_api_logs.appengine_googleapis_com_request_log_,
          DATE_ADD(CURRENT_TIMESTAMP(), -300, "SECOND"),
          CURRENT_TIMESTAMP()))
 WHERE
-protoPayload.line.logMessage CONTAINS 'Comicvine api' AND
+protoPayload.line.logMessage CONTAINS 'cvstats:' AND
 metadata.timestamp > DATE_ADD(CURRENT_TIMESTAMP(), -300, 'SECOND')
-HAVING cv_calls > 0
-ORDER BY time
 LIMIT 1000;
 '''
 
@@ -29,7 +31,13 @@ class ComicvineValidator(BaseValidator):
     def time(self, value):
         return int(float(value)*1000)
 
-    def cv_calls(self, value):
+    def status(self, value):
+        return int(value)
+
+    def response_time(self, value):
+        return float(value)
+
+    def retry(self, value):
         return int(value)
 
 
@@ -41,7 +49,14 @@ def main():
     logging.info('Found %d data points', len(data_points))
 
     if data_points:
-        columns = ['time', 'resource', 'cv_calls']
+        columns = [
+            'time',
+            'resource',
+            'status',
+            'cv_url',
+            'response_time',
+            'retry'
+        ]
         influx_points=[{
             'name': 'requests',
             'columns': columns,
