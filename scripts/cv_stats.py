@@ -7,18 +7,18 @@ from pullstats.bigquery.client import BigQueryClient, BaseValidator
 
 QUERY='''
 SELECT
-    metadata.timestamp AS timestamp,
+    metadata.timestamp AS time,
     protoPayload.resource AS resource,
     INTEGER(REGEXP_EXTRACT(protoPayload.line.logMessage, r'(\d+)$')) AS cv_calls
 FROM (TABLE_DATE_RANGE(
          pull_api_logs.appengine_googleapis_com_request_log_,
          DATE_ADD(CURRENT_TIMESTAMP(), -300, "SECOND"),
          CURRENT_TIMESTAMP()))
-WHERE 
+WHERE
 protoPayload.line.logMessage CONTAINS 'Comicvine api' AND
 metadata.timestamp > DATE_ADD(CURRENT_TIMESTAMP(), -300, 'SECOND')
 HAVING cv_calls > 0
-ORDER BY timestamp
+ORDER BY time
 LIMIT 1000;
 '''
 
@@ -26,7 +26,7 @@ LIMIT 1000;
 PROJECT_NUMBER = '462995942151'
 
 class ComicvineValidator(BaseValidator):
-    def timestamp(self, value):
+    def time(self, value):
         return int(float(value)*1000)
 
     def cv_calls(self, value):
@@ -41,14 +41,13 @@ def main():
     logging.info('Found %d data points', len(data_points))
 
     if data_points:
+        columns = ['time', 'resource', 'cv_calls']
         influx_points=[{
             'name': 'requests',
-            'columns': [
-                'time',
-                'resource',
-                'cv_calls',
+            'columns': columns,
+            'points': [
+                [row[key] for key in columns] for row in data_points
             ],
-            'points': data_points
         }]
 
         print json.dumps(influx_points)
