@@ -7,21 +7,18 @@ from pullstats.bigquery.client import BigQueryClient, BaseValidator
 
 QUERY='''
 SELECT
-    metadata.timestamp AS time,
-    protoPayload.resource AS resource,
+    time,
+    resource,
     REGEXP_EXTRACT(protoPayload.line.logMessage, r' status=(\d+)') AS status,
-    REGEXP_EXTRACT(protoPayload.line.logMessage, r' url=([^?]+)') AS cv_url,
+    REGEXP_EXTRACT(protoPayload.line.logMessage, r' url=([^ ]+)') AS cv_url,
     REGEXP_EXTRACT(protoPayload.line.logMessage,
-                   r' msec=([\d.]+)') AS response_time,
+                   r' latency=([\d.]+)') AS response_time,
     REGEXP_EXTRACT(protoPayload.line.logMessage, r' size=(\d+)') AS size,
-    REGEXP_EXTRACT(protoPayload.line.logMessage, r' retry=(\d+)') AS retry
-FROM (TABLE_DATE_RANGE(
-         pull_api_logs.appengine_googleapis_com_request_log_,
-         DATE_ADD(CURRENT_TIMESTAMP(), -300, "SECOND"),
-         CURRENT_TIMESTAMP()))
+    REGEXP_EXTRACT(protoPayload.line.logMessage, r' retries=(\d+)') AS retry
+FROM [pull_api_logs.varz_15m]
 WHERE
-protoPayload.line.logMessage CONTAINS 'cvstats:' AND
-metadata.timestamp > DATE_ADD(CURRENT_TIMESTAMP(), -300, 'SECOND')
+    protoPayload.line.varz_name = 'cvstats' AND
+    time > DATE_ADD(CURRENT_TIMESTAMP(), -300, 'SECOND')
 LIMIT 1000;
 '''
 
